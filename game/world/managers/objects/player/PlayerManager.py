@@ -352,6 +352,7 @@ class PlayerManager(UnitManager):
             self.player.orientation = self.location.o
             self.player.zone = self.zone
             self.player.explored_areas = self.explored_areas.to01()
+            self.player.taximask = self.taxi_manager.available_taxi_nodes.to01()
             self.player.health = self.health
             self.player.power1 = self.power_1
             self.player.power2 = self.power_2
@@ -443,7 +444,7 @@ class PlayerManager(UnitManager):
             create=True if not self.is_relocating else False,
             force_inventory_update=True if not self.is_relocating else False)
 
-        self.reset_fields()
+        self.reset_fields_older_than(time.time())
         self.update_lock = False
         self.teleport_destination_map = None
         self.teleport_destination = None
@@ -765,16 +766,29 @@ class PlayerManager(UnitManager):
     def has_area_explored(self, area_explore_bit):
         return self.explored_areas[area_explore_bit]
 
-    # TODO: Research XP for exploration.
-    #  Trigger quest explore requirement checks.
+    # TODO, Trigger quest explore requirement checks.
     def set_area_explored(self, area_information):
         self.explored_areas[area_information.area_explore_bit] = True
         if area_information.area_level > 0:
             if self.level < config.Unit.Player.Defaults.max_level:
-                xp_gain = area_information.area_level * 10
+                # The following calculations are taken from VMaNGOS core.
+                xp_rate = int(config.Server.Settings.xp_rate)
+                diff = self.level - area_information.area_level
+                if diff < -5:
+                    xp_gain = WorldDatabaseManager.exploration_base_xp_get_by_level(self.level + 5) * xp_rate
+                elif diff > 5:
+                    exploration_percent = (100 - ((diff - 5) * 5))
+                    if exploration_percent > 100:
+                        exploration_percent = 100
+                    elif exploration_percent < 0:
+                        exploration_percent = 0
+                    xp_gain = WorldDatabaseManager.exploration_base_xp_get_by_level(area_information.area_level) * exploration_percent / 100 * xp_rate
+                else:
+                    xp_gain = WorldDatabaseManager.exploration_base_xp_get_by_level(area_information.area_level) * xp_rate
                 self.give_xp([xp_gain])
             else:
                 xp_gain = 0
+
             # Notify client new discovered zone + xp gain.
             data = pack('<2I', area_information.zone_id, xp_gain)
             packet = PacketWriter.get_packet(OpCode.SMSG_EXPLORATION_EXPERIENCE, data)
@@ -1003,6 +1017,8 @@ class PlayerManager(UnitManager):
                     self.set_health(self.max_health)
                 elif self.health < self.max_health:
                     self.set_health(self.health + int(health_regen))
+            else:
+                should_update_health = False
 
             # Powers
 
@@ -1051,6 +1067,7 @@ class PlayerManager(UnitManager):
 
             if should_update_health or should_update_power:
                 self.set_dirty()
+
             self.last_regen = current_time
 
     # override
@@ -1246,15 +1263,17 @@ class PlayerManager(UnitManager):
                 if self.logout_timer < 0:
                     self.logout()
 
+            # Check "dirtiness" to determine if this player object should be updated yet or not.
+            if self.dirty and self.online:
+                self.send_update_self(reset_fields=False)
+                self.send_update_surrounding(self.generate_proper_update_packet())
+                MapManager.update_object(self)
+                if self.reset_fields_older_than(now):
+                    self.set_dirty(is_dirty=False, dirty_inventory=False)
+
         self.last_tick = now
 
-        if self.dirty and self.online:
-            self.send_update_self(reset_fields=False)
-            self.send_update_surrounding(self.generate_proper_update_packet())
-            MapManager.update_object(self)
-            self.reset_fields()
-            self.set_dirty(is_dirty=False, dirty_inventory=False)
-
+        # Player object finished being updated.
         self.update_lock = False
 
     def send_update_self(self, update_packet=None, create=False, force_inventory_update=False, reset_fields=True):
@@ -1268,7 +1287,7 @@ class PlayerManager(UnitManager):
         self.session.enqueue_packet(update_packet)
 
         if reset_fields:
-            self.reset_fields()
+            self.reset_fields_older_than(time.time())
 
     def send_update_surrounding(self, update_packet, include_self=False, create=False, force_inventory_update=False):
         if not create and (self.dirty_inventory or force_inventory_update):

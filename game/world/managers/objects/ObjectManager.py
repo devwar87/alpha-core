@@ -62,6 +62,14 @@ class ObjectManager(object):
         self.last_tick = 0
         self.movement_spline = None
 
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.guid == other.guid
+        return NotImplemented
+
+    def __ne__(self, other):
+        return not self == other
+
     def get_object_type_value(self):
         type_value = 0
         for type_ in self.object_type:
@@ -135,6 +143,10 @@ class ObjectManager(object):
     def reset_fields(self):
         # Reset updated fields
         self.update_packet_factory.reset()
+
+    def reset_fields_older_than(self, timestamp):
+        # Reset updated fields older than the specified timestamp
+        return self.update_packet_factory.reset_older_than(timestamp)
 
     def _get_base_structure(self, update_type):
         return pack(
