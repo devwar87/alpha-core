@@ -45,13 +45,13 @@ class MirrorTimer(object):
             packet = PacketWriter.get_packet(OpCode.SMSG_STOP_MIRROR_TIMER, data)
             self.owner.session.enqueue_packet(packet)
 
-    # There are only two available 'types' (Timer colors): Dark Yellow (0) or Blue (1)
-    # We use Dark Yellow for Feign Death.
+    # There are only two available 'types' (Timer colors): Dark Yellow (0) or Blue (1).
+    # We use Dark Yellow (Fatigue) for Feign Death since the actual value for Feign Death (2) will trigger
+    # LUA errors.
     def _get_type(self):
-        if self.type.value > MirrorTimerTypes.BREATH.value:
-            return 0
-        else:
-            return self.type.value
+        if self.type == MirrorTimerTypes.FEIGNDEATH:
+            return MirrorTimerTypes.FATIGUE.value
+        return self.type.value
 
     def send_full_update(self):
         if self.active:
@@ -87,15 +87,15 @@ class MirrorTimer(object):
                     self.handle_damage_timer(0.10)  # Damage: 10% of players max health.
                 elif self.type == MirrorTimerTypes.FATIGUE:
                     self.handle_damage_timer(0.20)  # Damage: 20% of players max health.
-                else:  # Feign Death
-                    self.handle_normal_timer()
+                else:  # Feign Death.
+                    self.handle_feign_death_timer()
 
     # TODO, should we halt regeneration when drowning or fatigue?
     #  Find drowning damage formula.
     #  CombatLog should display drown and fatigue.
     def handle_damage_timer(self, dmg_multiplier):
         if self.remaining == self.duration:
-            self.stop()  # Replenished
+            self.stop()  # Replenished.
         elif self.remaining == 0 and self.owner.health > 0:
             damage = int(self.owner.max_health * dmg_multiplier)
             if self.owner.health - damage <= 0:
@@ -105,6 +105,7 @@ class MirrorTimer(object):
                 self.owner.set_health(new_health)
                 self.owner.set_dirty()
 
-    def handle_normal_timer(self):
+    def handle_feign_death_timer(self):
         if self.remaining <= 0:
             self.stop()
+            self.owner.die()
