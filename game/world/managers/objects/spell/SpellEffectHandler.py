@@ -243,6 +243,13 @@ class SpellEffectHandler(object):
 
         target.skill_manager.add_skill(skill_id)
 
+    @staticmethod
+    def handle_leap(casting_spell, effect, caster, target):
+        if isinstance(effect.targets.simple_targets[0], Vector):
+            vector = effect.targets.simple_targets[0]
+            vector.o = target.location.o
+            target.teleport(target.map_, vector)
+
     # Block/parry/dodge/defense passives have their own effects and no aura. Flag the unit here as being able to block/parry/dodge.
     @staticmethod
     def handle_block_passive(casting_spell, effect, caster, target):
@@ -292,6 +299,7 @@ SPELL_EFFECTS = {
     SpellEffects.SPELL_EFFECT_APPLY_AREA_AURA: SpellEffectHandler.handle_apply_area_aura,
     SpellEffects.SPELL_EFFECT_SUMMON_TOTEM: SpellEffectHandler.handle_summon_totem,
     SpellEffects.SPELL_EFFECT_SCRIPT_EFFECT: SpellEffectHandler.handle_script_effect,
+    SpellEffects.SPELL_EFFECT_LEAP: SpellEffectHandler.handle_leap,
 
     # Passive effects - enable skills, add skills and proficiencies on login.
     SpellEffects.SPELL_EFFECT_BLOCK: SpellEffectHandler.handle_block_passive,
