@@ -82,8 +82,14 @@ class CreatureManager(UnitManager):
                                          self.creature_instance.position_y,
                                          self.creature_instance.position_z,
                                          self.creature_instance.orientation)
-            self.location = self.spawn_position
+            self.location = self.spawn_position.copy()
             self.respawn_time = randint(self.creature_instance.spawntimesecsmin, self.creature_instance.spawntimesecsmax)
+
+        # All creatures can block, parry and dodge by default.
+        # TODO CANT_BLOCK creature extra flag
+        self.has_block_passive = True
+        self.has_dodge_passive = True
+        self.has_parry_passive = True
 
     def load(self):
         MapManager.update_object(self)
@@ -188,12 +194,12 @@ class CreatureManager(UnitManager):
         )
 
         data = pack('<Q2I', self.guid, TrainerTypes.TRAINER_TYPE_GENERAL, train_spell_count) + train_spell_bytes + greeting_bytes
-        world_session.player_mgr.session.enqueue_packet(PacketWriter.get_packet(OpCode.SMSG_TRAINER_LIST, data))
+        world_session.player_mgr.enqueue_packet(PacketWriter.get_packet(OpCode.SMSG_TRAINER_LIST, data))
 
     def finish_loading(self):
         if self.creature_template and self.creature_instance:
             if not self.fully_loaded:
-                creature_model_info = WorldDatabaseManager.creature_get_model_info(self.current_display_id)
+                creature_model_info = WorldDatabaseManager.CreatureModelInfoHolder.creature_get_model_info(self.current_display_id)
                 if creature_model_info:
                     self.bounding_radius = creature_model_info.bounding_radius
                     self.combat_reach = creature_model_info.combat_reach
@@ -374,6 +380,15 @@ class CreatureManager(UnitManager):
 
     def _perform_combat_movement(self):
         if self.combat_target:
+            # TODO Temp, extremely basic evade / runback mechanic based ONLY on distance. Replace later with a proper one.
+            if self.location.distance(self.spawn_position) > 50:
+                self.leave_combat(force=True)
+                self.set_health(self.max_health)
+                self.recharge_power()
+                self.set_dirty()
+                self.movement_manager.send_move_to([self.spawn_position], self.running_speed, SplineFlags.SPLINEFLAG_RUNMODE)
+                return
+
             self.location.face_point(self.combat_target.location)
 
             current_distance = self.location.distance(self.combat_target.location)
@@ -500,11 +515,6 @@ class CreatureManager(UnitManager):
     # override
     def has_ranged_weapon(self):
         return self.wearing_ranged_weapon
-
-    # override
-    def can_block(self):
-        # All creatures can block by default
-        return True  # TODO CANT_BLOCK creature extra flag
 
     # override
     def set_weapon_mode(self, weapon_mode):
