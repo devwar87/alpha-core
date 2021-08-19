@@ -15,6 +15,7 @@ from game.world.managers.objects.spell.CooldownEntry import CooldownEntry
 from game.world.managers.objects.spell.SpellEffectHandler import SpellEffectHandler
 from network.packet.PacketWriter import PacketWriter, OpCode
 from utils.Logger import Logger
+from utils.constants import MiscFlags
 from utils.constants.ItemCodes import InventoryError, InventoryTypes
 from utils.constants.MiscCodes import ObjectTypes, HitInfo
 from utils.constants.SpellCodes import SpellCheckCastResult, SpellCastStatus, \
@@ -519,7 +520,7 @@ class SpellManager(object):
 
         if self.unit_mgr.channel_object:
             channel_object = MapManager.get_surrounding_gameobject_by_guid(self.unit_mgr, self.unit_mgr.channel_object)
-            if channel_object and channel_object.gobject_template.flags & 64:
+            if channel_object and channel_object.gobject_template.flags & MiscFlags.GameObjectFlags.TRIGGERED:
                 MapManager.remove_object(channel_object)
 
         self.unit_mgr.set_channel_object(0)
@@ -678,7 +679,7 @@ class SpellManager(object):
 
         # The spell triggered by ritual of summoning has no attributes. Check for known restrictions here.
         # Note that summoning didn't have many restrictions in 0.5.3. See SpellEffectHandler.handle_summon_player for notes.
-        if self.unit_mgr.get_type() == ObjectTypes.TYPE_PLAYER:
+        if casting_spell.is_summon_spell() and self.unit_mgr.get_type() == ObjectTypes.TYPE_PLAYER:
             target_guid = self.unit_mgr.current_selection
             target_unit = MapManager.get_surrounding_unit_by_guid(self.unit_mgr, target_guid)
             if target_unit:
