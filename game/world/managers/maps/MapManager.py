@@ -1,7 +1,7 @@
 import traceback
 import _queue
 from database.dbc.DbcDatabaseManager import DbcDatabaseManager
-from game.world.managers.maps.Constants import SIZE, RESOLUTION_ZMAP, RESOLUTION_AREA_INFO, RESOLUTION_LIQUIDS
+from game.world.managers.maps.Constants import TILE_SIZE, RESOLUTION_ZMAP, RESOLUTION_AREA_INFO, RESOLUTION_LIQUIDS
 from game.world.managers.maps.Map import Map
 from game.world.managers.maps.MapHelpers import MapHelpers
 from game.world.managers.maps.MapTile import MapTile
@@ -61,8 +61,8 @@ class MapManager(object):
         if not config.Server.Settings.use_map_tiles:
             return
 
-        x = MapHelpers.get_tile_x(x)
-        y = MapHelpers.get_tile_y(y)
+        x = MapHelpers.get_tile_x(x, TILE_SIZE, 32.0)
+        y = MapHelpers.get_tile_y(y, TILE_SIZE, 32.0)
 
         key = f'{map_id},{x},{y}'
         if key in PENDING_LOAD:
@@ -86,8 +86,8 @@ class MapManager(object):
         if map_id not in MAP_LIST:
             return False
 
-        x = MapHelpers.get_tile_x(x)
-        y = MapHelpers.get_tile_y(y)
+        x = MapHelpers.get_tile_x(x, TILE_SIZE, 32.0)
+        y = MapHelpers.get_tile_y(y, TILE_SIZE, 32.0)
 
         for i in range(-1, 1):
             for j in range(-1, 1):
@@ -111,7 +111,7 @@ class MapManager(object):
         if map_id > 1:
             return True
 
-        map_tile_x, map_tile_y, tile_local_x, tile_local_y = MapHelpers.calculate_tile(x, y, RESOLUTION_AREA_INFO - 1)
+        map_tile_x, map_tile_y, tile_local_x, tile_local_y = MapHelpers.calculate_tile(x, y, TILE_SIZE, RESOLUTION_AREA_INFO - 1, 32.0)
         if not MapManager._check_tile_load(map_id, x, y, map_tile_x, map_tile_y):
             return False
 
@@ -126,9 +126,9 @@ class MapManager(object):
     @staticmethod
     def calculate_z(map_id, x, y, current_z=0.0):
         try:
-            map_tile_x, map_tile_y, tile_local_x, tile_local_y = MapHelpers.calculate_tile(x, y, (RESOLUTION_ZMAP - 1))
-            x_normalized = (RESOLUTION_ZMAP - 1) * (32.0 - (x / SIZE) - map_tile_x) - tile_local_x
-            y_normalized = (RESOLUTION_ZMAP - 1) * (32.0 - (y / SIZE) - map_tile_y) - tile_local_y
+            map_tile_x, map_tile_y, tile_local_x, tile_local_y = MapHelpers.calculate_tile(x, y, TILE_SIZE, (RESOLUTION_ZMAP - 1), 32.0)
+            x_normalized = (RESOLUTION_ZMAP - 1) * (32.0 - (x / TILE_SIZE) - map_tile_x) - tile_local_x
+            y_normalized = (RESOLUTION_ZMAP - 1) * (32.0 - (y / TILE_SIZE) - map_tile_y) - tile_local_y
 
             if not MapManager._check_tile_load(map_id, x, y, map_tile_x, map_tile_y):
                 return current_z if current_z else 0.0
@@ -150,7 +150,7 @@ class MapManager(object):
     @staticmethod
     def get_area_information(map_id, x, y):
         try:
-            map_tile_x, map_tile_y, tile_local_x, tile_local_y = MapHelpers.calculate_tile(x, y, RESOLUTION_AREA_INFO - 1)
+            map_tile_x, map_tile_y, tile_local_x, tile_local_y = MapHelpers.calculate_tile(x, y, TILE_SIZE, RESOLUTION_AREA_INFO - 1, 32.0)
 
             if not MapManager._check_tile_load(map_id, x, y, map_tile_x, map_tile_y):
                 return None
@@ -163,7 +163,7 @@ class MapManager(object):
     @staticmethod
     def get_liquid_information(map_id, x, y, z):
         try:
-            map_tile_x, map_tile_y, tile_local_x, tile_local_y = MapHelpers.calculate_tile(x, y, RESOLUTION_LIQUIDS - 1)
+            map_tile_x, map_tile_y, tile_local_x, tile_local_y = MapHelpers.calculate_tile(x, y, TILE_SIZE, RESOLUTION_LIQUIDS - 1, 32.0)
 
             if not MapManager._check_tile_load(map_id, x, y, map_tile_x, map_tile_y):
                 return None
@@ -239,22 +239,24 @@ class MapManager(object):
     def should_relocate(world_object, destination, destination_map):
         grid_manager = MapManager.get_grid_manager_by_map_id(destination_map)
         destination_cells = grid_manager.get_surrounding_cells_by_location(destination.x, destination.y, destination_map)
-        current_cell = grid_manager.get_cells()[world_object.current_cell]
+        current_cell = world_object.current_cell
         return current_cell in destination_cells
 
     @staticmethod
     def update_object(world_object):
         if world_object.current_cell:
+            # Retrieve the old GridManager.
             old_grid_manager = MapManager.get_grid_manager_by_map_id(world_object.current_cell.map_)
         else:
-            old_grid_manager = None
+            # Use the same GridManager for current and old.
+            old_grid_manager = MapManager.get_grid_manager_by_map_id(world_object.map_)
 
         grid_manager = MapManager.get_grid_manager_by_map_id(world_object.map_)
         grid_manager.update_object(world_object, old_grid_manager)
 
     @staticmethod
-    def remove_object(world_object):
-        MapManager.get_grid_manager_by_map_id(world_object.map_).remove_object(world_object)
+    def remove_object(world_object, notify=False):
+        MapManager.get_grid_manager_by_map_id(world_object.map_).remove_object(world_object, notify)
 
     @staticmethod
     def send_surrounding(packet, world_object, include_self=True, exclude=None, use_ignore=False):

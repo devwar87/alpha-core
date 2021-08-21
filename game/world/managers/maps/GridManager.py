@@ -1,4 +1,5 @@
-from game.world.managers.maps.Cell import Cell, Cell_Key
+from game.world.managers.maps.Cell import Cell, CellKey
+from game.world.managers.maps.Constants import CELL_SIZE
 from game.world.managers.maps.MapHelpers import MapHelpers
 from utils.constants.MiscCodes import ObjectTypes
 
@@ -7,7 +8,7 @@ class GridManager(object):
     def __init__(self, active_cell_callback, map_id, instance_id=0):
         self.map_id = map_id
         self.instance_id = instance_id
-        self.cells = [[None for r in range(0, 64)] for c in range(0, 64)]
+        self.cells = [[None for r in range(0, 256)] for c in range(0, 256)]
         self.active_cell_callback = active_cell_callback
 
     def add_or_get(self, world_object, store=False):
@@ -25,12 +26,13 @@ class GridManager(object):
 
         if cell_key != world_object.current_cell:
             if world_object.current_cell:
-                # If the old cell exists on this GridManager, remove this world object from it.
-                if self.cells[world_object.current_cell.x][world_object.current_cell.y]:
-                    self.cells[world_object.current_cell.x][world_object.current_cell.y].remove(world_object)
-                # If the old cell belongs to a different GridManager, try to remove world_object from old location.
-                elif old_grid_manager:
-                    old_grid_manager.remove_object(world_object)
+                if old_grid_manager == self:
+                    print('Removing from current grid manager.')
+                    self.remove_object(world_object, notify=False)
+                else:
+                    print('Removing from old grid manager.')
+                    old_grid_manager.remove_object(world_object, notify=True)
+
             # If the new cell already exists, add this world object.
             if self.cells[cell_key.x][cell_key.y]:
                 self.cells[cell_key.x][cell_key.y].add(self, world_object)
@@ -38,11 +40,27 @@ class GridManager(object):
             else:
                 self.add_or_get(world_object, store=True)
 
+            # Update old GridManager with the old CellKey.
+            if old_grid_manager != self and world_object.current_cell:
+                old_grid_manager.update_players(world_object)
+
+            # Update world_object cell.
+            world_object.current_cell = cell_key
+
+            # Update new GridManager with the new CellKey.
+            self.update_players(world_object)
+
             world_object.on_cell_change()
 
-    def remove_object(self, world_object):
+    def update_players(self, world_object):
+        for cell in list(self.get_surrounding_cells_by_object(world_object)):
+            cell.update_players()
+
+    def remove_object(self, world_object, notify=False):
         if self.cells[world_object.current_cell.x][world_object.current_cell.y]:
-            self.cells[world_object.current_cell.x][world_object.current_cell.y].remove(world_object)
+            self.cells[world_object.current_cell.x][world_object.current_cell.y].remove(self, world_object)
+            if notify:
+                self.update_players(world_object)
 
     def is_active_cell(self, cell_key):
         return self.cells[cell_key.x][cell_key.y] and self.cells[cell_key.x][cell_key.y].has_players()
@@ -56,14 +74,24 @@ class GridManager(object):
             vector = world_object.location
         near_cell_keys = set()
 
-        x = MapHelpers.get_tile_x(vector.x)
-        y = MapHelpers.get_tile_y(vector.y)
+        x = MapHelpers.get_tile_x(vector.x, CELL_SIZE, 128)
+        y = MapHelpers.get_tile_y(vector.y, CELL_SIZE, 128)
 
+        # Quadrants.
+        # | x | x | x |
+        # | x | P | x |
+        # | x | x | x |
         for i in range(-1, 1):
             for j in range(-1, 1):
-                if -1 < x + i < 64 and -1 < y + j < 64:
-                    if self.cells[x + i][y + j] and self.cells[x + i][y + j].has_players():
-                        near_cell_keys.add(Cell_Key(x=x + i, y=y + j, map_=self.map_id))
+                if -1 < x + i < 256 and -1 < y + j < 256:
+                    if self.cells[x + i][y + j] and self.cells[x + i][y + j]:
+                        near_cell_keys.add(CellKey(x=x + i, y=y + j, map_=self.map_id))
+                    if self.cells[x - i][y - j] and self.cells[x - i][y - j]:
+                        near_cell_keys.add(CellKey(x=x - i, y=y - j, map_=self.map_id))
+                    if self.cells[x - i][y + j] and self.cells[x - i][y + j]:
+                        near_cell_keys.add(CellKey(x=x - i, y=y + j, map_=self.map_id))
+                    if self.cells[x + i][y - j] and self.cells[x + i][y - j]:
+                        near_cell_keys.add(CellKey(x=x + i, y=y - j, map_=self.map_id))
 
         return near_cell_keys
 
@@ -77,20 +105,29 @@ class GridManager(object):
     def get_surrounding_cells_by_location(self, x, y, cell_key=None):
         near_cells = set()
 
-        x = MapHelpers.get_tile_x(x)
-        y = MapHelpers.get_tile_y(y)
+        x = MapHelpers.get_tile_x(x, CELL_SIZE, 128)
+        y = MapHelpers.get_tile_y(y, CELL_SIZE, 128)
 
         if cell_key:
             x = cell_key.x
             y = cell_key.y
 
+        # Quadrants.
+        # | x | x | x |
+        # | x | P | x |
+        # | x | x | x |
         for i in range(-1, 1):
             for j in range(-1, 1):
-                if -1 < x + i < 64 and -1 < y + j < 64:
-                    if self.cells[x + i][y + j] and self.cells[x + i][y + j].has_players():
+                if -1 < x + i < 256 and -1 < y + j < 256:
+                    if self.cells[x + i][y + j] and self.cells[x + i][y + j]:
                         near_cells.add(self.cells[x + i][y + j])
+                    if self.cells[x - i][y - j] and self.cells[x - i][y - j]:
+                        near_cells.add(self.cells[x - i][y - j])
+                    if self.cells[x - i][y + j] and self.cells[x - i][y + j]:
+                        near_cells.add(self.cells[x - i][y + j])
+                    if self.cells[x + i][y - j] and self.cells[x + i][y - j]:
+                        near_cells.add(self.cells[x + i][y - j])
 
-        print(near_cells)
         return near_cells
 
     def send_surrounding(self, packet, world_object, include_self=True, exclude=None, use_ignore=False):
@@ -170,22 +207,23 @@ class GridManager(object):
 
     @staticmethod
     def get_cell_key(x, y, map_):
-        x, y, cx, cy = MapHelpers.calculate_tile(x, y, 15)
-        return Cell_Key(x=x, y=y, cx=cx, cy=cy, map_=map_)
+        x = MapHelpers.get_tile_x(x, CELL_SIZE, 128)
+        y = MapHelpers.get_tile_y(y, CELL_SIZE, 128)
+        return CellKey(x=x, y=y, map_=map_)
 
     def get_cells(self):
         return self.cells
 
     def update_creatures(self):
-        for x in range(0, 64):
-            for y in range(0, 64):
+        for x in range(0, 256):
+            for y in range(0, 256):
                 if self.cells[x][y] and self.cells[x][y].has_players():
                     for guid, creature in list(self.cells[x][y].creatures.items()):
                         creature.update()
 
     def update_gameobjects(self):
-        for x in range(0, 64):
-            for y in range(0, 64):
+        for x in range(0, 256):
+            for y in range(0, 256):
                 if self.cells[x][y] and self.cells[x][y].has_players():
                     for guid, gameobject in list(self.cells[x][y].gameobjects.items()):
                         gameobject.update()

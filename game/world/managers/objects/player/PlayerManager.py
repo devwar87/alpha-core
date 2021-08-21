@@ -275,7 +275,7 @@ class PlayerManager(UnitManager):
 
         self.friends_manager.send_offline_notification()
         self.session.save_character()
-        MapManager.remove_object(self)
+        MapManager.remove_object(self, notify=True)
         WorldSessionStateHandler.pop_active_player(self)
         self.session.player_mgr = None
         self.session = None
@@ -363,6 +363,8 @@ class PlayerManager(UnitManager):
     def destroy_near_object(self, guid, skip_check=False):
         if skip_check or guid in self.known_objects:
             if self.known_objects[guid] is not None:
+                if self.known_objects[guid].get_type() == ObjectTypes.TYPE_PLAYER:
+                    print(f'Destroying {self.known_objects[guid].player.name} from player {self.player.name}')
                 self.enqueue_packet(self.known_objects[guid].get_destroy_packet())
                 del self.known_objects[guid]
                 return True

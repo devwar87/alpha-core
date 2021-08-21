@@ -2,11 +2,9 @@ from utils.constants.MiscCodes import ObjectTypes
 from typing import NamedTuple
 
 
-class Cell_Key(NamedTuple):
+class CellKey(NamedTuple):
     x: int
     y: int
-    cx: int
-    cy: int
     map_: int
 
 
@@ -29,8 +27,6 @@ class Cell(object):
         return len(self.players) > 0
 
     def add(self, grid_manager, world_object):
-        # Update world_object cell so the below messages affect the new cell surroundings.
-        world_object.current_cell = self.key
         if world_object.get_type() == ObjectTypes.TYPE_PLAYER:
             self.players[world_object.guid] = world_object
         elif world_object.get_type() == ObjectTypes.TYPE_UNIT:
@@ -38,27 +34,25 @@ class Cell(object):
         elif world_object.get_type() == ObjectTypes.TYPE_GAMEOBJECT:
             self.gameobjects[world_object.guid] = world_object
 
-        # A world_object entered this cell, notify players.
-        self.update_players()
-
         # Always trigger cell changed event for players.
         if world_object.get_type() == ObjectTypes.TYPE_PLAYER:
             self.active_cell_callback(world_object)
 
     # Make each player update its surroundings, adding or removing world objects as needed.
     def update_players(self):
+        print(f'{self.key} - {len(self.players)}')
         for player in list(self.players.values()):
+            print(f'Update player {player.player.name}')
             player.update_surrounding_on_me()
 
-    def remove(self, world_object):
+    def remove(self, grid_manager, world_object):
+        print('Removed')
         if world_object.get_type() == ObjectTypes.TYPE_PLAYER:
             self.players.pop(world_object.guid, None)
         elif world_object.get_type() == ObjectTypes.TYPE_UNIT:
             self.creatures.pop(world_object.guid, None)
         elif world_object.get_type() == ObjectTypes.TYPE_GAMEOBJECT:
             self.gameobjects.pop(world_object.guid, None)
-
-        self.update_players()
 
     def send_all(self, packet, source=None, exclude=None, use_ignore=False):
         for guid, player_mgr in list(self.players.items()):
