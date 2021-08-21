@@ -3,6 +3,7 @@ import _queue
 from database.dbc.DbcDatabaseManager import DbcDatabaseManager
 from game.world.managers.maps.Constants import SIZE, RESOLUTION_ZMAP, RESOLUTION_AREA_INFO, RESOLUTION_LIQUIDS
 from game.world.managers.maps.Map import Map
+from game.world.managers.maps.MapHelpers import MapHelpers
 from game.world.managers.maps.MapTile import MapTile
 from utils.ConfigManager import config
 from utils.Logger import Logger
@@ -60,8 +61,8 @@ class MapManager(object):
         if not config.Server.Settings.use_map_tiles:
             return
 
-        x = MapManager.get_tile_x(x)
-        y = MapManager.get_tile_y(y)
+        x = MapHelpers.get_tile_x(x)
+        y = MapHelpers.get_tile_y(y)
 
         key = f'{map_id},{x},{y}'
         if key in PENDING_LOAD:
@@ -85,8 +86,8 @@ class MapManager(object):
         if map_id not in MAP_LIST:
             return False
 
-        x = MapManager.get_tile_x(x)
-        y = MapManager.get_tile_y(y)
+        x = MapHelpers.get_tile_x(x)
+        y = MapHelpers.get_tile_y(y)
 
         for i in range(-1, 1):
             for j in range(-1, 1):
@@ -96,36 +97,6 @@ class MapManager(object):
                         MAPS[map_id].tiles[x + i][y + j] = MapTile(map_id, x + i, y + j)
 
         return True
-
-    @staticmethod
-    def get_tile(x, y):
-        tile_x = int(32.0 - MapManager.validate_map_coord(x) / SIZE)
-        tile_y = int(32.0 - MapManager.validate_map_coord(y) / SIZE)
-        return [tile_x, tile_y]
-
-    @staticmethod
-    def get_tile_x(x):
-        tile_x = int(32.0 - MapManager.validate_map_coord(x) / SIZE)
-        return tile_x
-
-    @staticmethod
-    def get_tile_y(y):
-        tile_y = int(32.0 - MapManager.validate_map_coord(y) / SIZE)
-        return tile_y
-
-    @staticmethod
-    def get_submap_tile_x(x):
-        tile_x = int((RESOLUTION_ZMAP - 1) * (
-                32.0 - MapManager.validate_map_coord(x) / SIZE - int(32.0 - MapManager.validate_map_coord(x) / SIZE)))
-
-        return tile_x
-
-    @staticmethod
-    def get_submap_tile_y(y):
-        tile_y = int((RESOLUTION_ZMAP - 1) * (
-                32.0 - MapManager.validate_map_coord(y) / SIZE - int(32.0 - MapManager.validate_map_coord(y) / SIZE)))
-
-        return tile_y
 
     @staticmethod
     def validate_teleport_destination(map_id, x, y):
@@ -140,7 +111,7 @@ class MapManager(object):
         if map_id > 1:
             return True
 
-        map_tile_x, map_tile_y, tile_local_x, tile_local_y = MapManager.calculate_tile(x, y, RESOLUTION_AREA_INFO - 1)
+        map_tile_x, map_tile_y, tile_local_x, tile_local_y = MapHelpers.calculate_tile(x, y, RESOLUTION_AREA_INFO - 1)
         if not MapManager._check_tile_load(map_id, x, y, map_tile_x, map_tile_y):
             return False
 
@@ -155,7 +126,7 @@ class MapManager(object):
     @staticmethod
     def calculate_z(map_id, x, y, current_z=0.0):
         try:
-            map_tile_x, map_tile_y, tile_local_x, tile_local_y = MapManager.calculate_tile(x, y, (RESOLUTION_ZMAP - 1))
+            map_tile_x, map_tile_y, tile_local_x, tile_local_y = MapHelpers.calculate_tile(x, y, (RESOLUTION_ZMAP - 1))
             x_normalized = (RESOLUTION_ZMAP - 1) * (32.0 - (x / SIZE) - map_tile_x) - tile_local_x
             y_normalized = (RESOLUTION_ZMAP - 1) * (32.0 - (y / SIZE) - map_tile_y) - tile_local_y
 
@@ -179,7 +150,7 @@ class MapManager(object):
     @staticmethod
     def get_area_information(map_id, x, y):
         try:
-            map_tile_x, map_tile_y, tile_local_x, tile_local_y = MapManager.calculate_tile(x, y, RESOLUTION_AREA_INFO - 1)
+            map_tile_x, map_tile_y, tile_local_x, tile_local_y = MapHelpers.calculate_tile(x, y, RESOLUTION_AREA_INFO - 1)
 
             if not MapManager._check_tile_load(map_id, x, y, map_tile_x, map_tile_y):
                 return None
@@ -192,7 +163,7 @@ class MapManager(object):
     @staticmethod
     def get_liquid_information(map_id, x, y, z):
         try:
-            map_tile_x, map_tile_y, tile_local_x, tile_local_y = MapManager.calculate_tile(x, y, RESOLUTION_LIQUIDS - 1)
+            map_tile_x, map_tile_y, tile_local_x, tile_local_y = MapHelpers.calculate_tile(x, y, RESOLUTION_LIQUIDS - 1)
 
             if not MapManager._check_tile_load(map_id, x, y, map_tile_x, map_tile_y):
                 return None
@@ -229,15 +200,6 @@ class MapManager(object):
         # Tile exist, its initialized and has loaded its internal data.
         return tile is not None and tile.initialized and tile.is_valid
 
-    @staticmethod
-    def calculate_tile(x, y, resolution):
-        x = MapManager.validate_map_coord(x)
-        y = MapManager.validate_map_coord(y)
-        map_tile_x = int(32.0 - (x / SIZE))
-        map_tile_y = int(32.0 - (y / SIZE))
-        tile_local_x = int(resolution * (32.0 - (x / SIZE) - map_tile_x))
-        tile_local_y = int(resolution * (32.0 - (y / SIZE) - map_tile_y))
-        return map_tile_x, map_tile_y, tile_local_x, tile_local_y
 
     @staticmethod
     def get_height(map_id, map_tile_x, map_tile_y, map_tile_local_x, map_tile_local_y):
@@ -256,15 +218,6 @@ class MapManager(object):
             map_tile_local_y = int(-map_tile_local_y - 1)
 
         return MAPS[map_id].tiles[map_tile_x][map_tile_y].z_height_map[map_tile_local_x][map_tile_local_y]
-
-    @staticmethod
-    def validate_map_coord(coord):
-        if coord > 32.0 * SIZE:
-            return 32.0 * SIZE
-        elif coord < -32.0 * SIZE:
-            return -32 * SIZE
-        else:
-            return coord
 
     @staticmethod
     def get_map(map_id):
@@ -292,8 +245,7 @@ class MapManager(object):
     @staticmethod
     def update_object(world_object):
         if world_object.current_cell:
-            old_map = int(world_object.current_cell.split(':')[-1])
-            old_grid_manager = MapManager.get_grid_manager_by_map_id(old_map)
+            old_grid_manager = MapManager.get_grid_manager_by_map_id(world_object.current_cell.map_)
         else:
             old_grid_manager = None
 
