@@ -44,7 +44,7 @@ class GridManager(object):
             # Update new location surroundings, excluding intersecting cells from previous call.
             self.update_players(current_cell_key, exclude_cells=affected_cells)
 
-        # World object is dirty, notify surrounding players.
+        # World object is dirty, notify self and surrounding players.
         if world_object.dirty:
             if world_object.get_type() == ObjectTypes.TYPE_PLAYER:
                 world_object.send_update_self(reset_fields=False)
