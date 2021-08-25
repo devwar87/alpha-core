@@ -1369,11 +1369,12 @@ class PlayerManager(UnitManager):
                 if self.logout_timer < 0:
                     self.logout()
 
+            # Check "dirtiness" to determine if this player object should be updated yet or not.
             if self.dirty:
                 MapManager.update_object(self)
                 if self.reset_fields_older_than(now):
                     self.set_dirty(is_dirty=False, dirty_inventory=False)
-            # Check "dirtiness" to determine if this player object should be updated yet or not.
+            # Not dirty, has a pending teleport and a teleport is not ongoing.
             elif not self.update_lock and not self.dirty and self.pending_teleport_destination:
                 self.trigger_teleport()
 
