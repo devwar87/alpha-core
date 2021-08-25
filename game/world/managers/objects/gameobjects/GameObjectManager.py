@@ -295,13 +295,12 @@ class GameObjectManager(ObjectManager):
 
     # override
     def respawn(self):
-        self.is_spawned = True
         self.state = GameObjectStates.GO_STATE_READY
         self.respawn_timer = 0
         self.respawn_time = randint(self.gobject_instance.spawntimesecsmin,
                                     self.gobject_instance.spawntimesecsmax)
 
-        self.send_create_packet_surroundings()
+        MapManager.respawn_object(self)
 
     # override
     def update(self):
@@ -309,16 +308,7 @@ class GameObjectManager(ObjectManager):
         if now > self.last_tick > 0:
             elapsed = now - self.last_tick
 
-            if self.is_spawned:
-                # Check "dirtiness" to determine if this game object should be updated yet or not.
-                if self.dirty:
-                    MapManager.send_surrounding(self.generate_proper_update_packet(create=False), self,
-                                                include_self=False)
-                    MapManager.update_object(self)
-                    if self.reset_fields_older_than(now):
-                        self.set_dirty(is_dirty=False)
-            # Not spawned.
-            else:
+            if not self.is_spawned:
                 self.respawn_timer += elapsed
                 if self.respawn_timer >= self.respawn_time and not self.is_summon:
                     self.respawn()

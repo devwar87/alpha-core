@@ -256,11 +256,10 @@ class ObjectManager(object):
 
     # override
     def despawn(self):
-        self.is_spawned = False
         if self.is_summon:
             MapManager.remove_object(self)
         else:
-            MapManager.send_surrounding(self.get_destroy_packet(), self, include_self=False)
+            MapManager.despawn_object(self)
 
     # override
     def update(self):

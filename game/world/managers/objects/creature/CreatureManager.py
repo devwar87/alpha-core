@@ -507,11 +507,10 @@ class CreatureManager(UnitManager):
             self.killed_by.group_manager.clear_looters_for_victim(self)
         self.killed_by = None
 
-        self.is_spawned = True
         self.respawn_timer = 0
         self.respawn_time = randint(self.creature_instance.spawntimesecsmin, self.creature_instance.spawntimesecsmax)
 
-        MapManager.send_surrounding(self.generate_proper_update_packet(create=True), self, include_self=False)
+        MapManager.respawn_object(self)
 
     # override
     def die(self, killer=None):

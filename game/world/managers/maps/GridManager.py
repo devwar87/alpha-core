@@ -1,4 +1,5 @@
 import math
+import time
 
 from utils.ConfigManager import config
 from utils.constants.MiscCodes import ObjectTypes
@@ -43,6 +44,15 @@ class GridManager(object):
             affected_cells = self.update_players(source_cell_key)
             # Update new location surroundings, excluding intersecting cells from previous call.
             self.update_players(current_cell_key, exclude_cells=affected_cells)
+        elif world_object.dirty:
+            if world_object.get_type() == ObjectTypes.TYPE_PLAYER:
+                world_object.send_update_self(reset_fields=False)
+            self.update_players(world_object.current_cell)
+            if world_object.reset_fields_older_than(time.time()):
+                if world_object.get_type() == ObjectTypes.TYPE_PLAYER:
+                    world_object.set_dirty(is_dirty=False, dirty_inventory=False)
+                else:
+                    world_object.set_dirty(is_dirty=False)
 
         # Notify cell changed if needed.
         if old_grid_manager and old_grid_manager != self or current_cell_key != source_cell_key:
@@ -63,6 +73,22 @@ class GridManager(object):
             # Set affected cells as active cells if needed.
             self.activate_cells(affected_cells)
 
+    def remove_object(self, world_object, update_players=True):
+        cell = self.cells.get(world_object.current_cell)
+        if cell:
+            cell.remove(world_object)
+            # Notify surrounding players.
+            if update_players:
+                self.update_players(cell.key)
+
+    def respawn_object(self, world_object):
+        world_object.is_spawned = True
+        self.update_players(world_object.current_cell)
+
+    def despawn_object(self, world_object):
+        world_object.is_spawned = False
+        self.update_players(world_object.current_cell)
+
     def activate_cells(self, cells):
         for cell in cells:
             if cell.key not in self.active_cell_keys:
@@ -73,14 +99,6 @@ class GridManager(object):
             if cell.key not in self.active_cell_keys:
                 for creature in list(cell.creatures.values()):
                     self.active_cell_callback(creature)
-
-    def remove_object(self, world_object, update_players=True):
-        cell = self.cells.get(world_object.current_cell)
-        if cell:
-            cell.remove(world_object)
-            # Notify surrounding players.
-            if update_players:
-                self.update_players(cell.key)
 
     def update_players(self, cell_key, exclude_cells=set()):
         # Avoid update calls if no players are present.

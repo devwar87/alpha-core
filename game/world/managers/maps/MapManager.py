@@ -305,6 +305,17 @@ class MapManager(object):
         MapManager.get_grid_manager_by_map_id(world_object.map_).remove_object(world_object)
 
     @staticmethod
+    def despawn_object(world_object):
+        grid_manager = MapManager.get_grid_manager_by_map_id(world_object.map_)
+        grid_manager.despawn_object(world_object)
+
+    @staticmethod
+    def respawn_object(world_object):
+        grid_manager = MapManager.get_grid_manager_by_map_id(world_object.map_)
+        grid_manager.respawn_object(world_object)
+
+
+    @staticmethod
     def send_surrounding(packet, world_object, include_self=True, exclude=None, use_ignore=False):
         MapManager.get_grid_manager_by_map_id(world_object.map_).send_surrounding(
             packet, world_object, include_self, exclude, use_ignore)
