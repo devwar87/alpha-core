@@ -314,7 +314,6 @@ class MapManager(object):
         grid_manager = MapManager.get_grid_manager_by_map_id(world_object.map_)
         grid_manager.respawn_object(world_object)
 
-
     @staticmethod
     def send_surrounding(packet, world_object, include_self=True, exclude=None, use_ignore=False):
         MapManager.get_grid_manager_by_map_id(world_object.map_).send_surrounding(
