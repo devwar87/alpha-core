@@ -486,7 +486,6 @@ class CreatureManager(UnitManager):
 
             # Check "dirtiness" to determine if this creature object should be updated yet or not.
             if self.dirty:
-                MapManager.send_surrounding(self.generate_proper_update_packet(create=False), self, include_self=False)
                 MapManager.update_object(self)
                 if self.reset_fields_older_than(now):
                     self.set_dirty(is_dirty=False)

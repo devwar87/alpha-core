@@ -236,9 +236,7 @@ class PlayerManager(UnitManager):
         self.reputation_manager.send_initialize_factions()
 
         # Notify player with create packet.
-        self.send_update_self(create=True if not self.is_relocating else False,
-                              force_inventory_update=True if not self.is_relocating else False,
-                              reset_fields=True)
+        self.send_update_self(create=True, force_inventory_update=True, reset_fields=True)
 
         # Place player in a world cell.
         MapManager.update_object(self)
@@ -325,20 +323,22 @@ class PlayerManager(UnitManager):
                     update_packet = player.generate_proper_update_packet(create=True, is_self=False)
                     self.enqueue_packet(NameQueryHandler.get_query_details(player.player))
                     self.enqueue_packet(update_packet)
-                if guid in self.known_objects and player.dirty:
+                    self.known_objects[guid] = player
+                # We know this player and its pending an update, request partial.
+                elif guid in self.known_objects and player.dirty:
                     partial_packet = player.generate_proper_update_packet(create=False, is_self=False)
                     self.enqueue_packet(partial_packet)
-                self.known_objects[guid] = player
 
         # Surrounding creatures.
         for guid, creature in creatures.items():
             active_objects[guid] = creature
-            if creature.is_spawned and guid not in self.known_objects or guid in self.known_objects and not self.known_objects[guid]:
+            if creature.is_spawned and guid not in self.known_objects:
                 # We don't know this creature, notify self with its update packet.
                 update_packet = creature.generate_proper_update_packet(create=True, is_self=False)
                 self.enqueue_packet(update_packet)
                 self.enqueue_packet(creature.query_details())
                 self.known_objects[guid] = creature
+            # We know this creature and its pending an update, request partial.
             elif creature.is_spawned and guid in self.known_objects and creature.dirty:
                 partial_packet = creature.generate_proper_update_packet(create=False, is_self=False)
                 self.enqueue_packet(partial_packet)
@@ -349,12 +349,13 @@ class PlayerManager(UnitManager):
         # Surrounding game objects.
         for guid, gobject in game_objects.items():
             active_objects[guid] = gobject
-            if gobject.is_spawned and guid not in self.known_objects or guid in self.known_objects and not self.known_objects[guid]:
+            if gobject.is_spawned and guid not in self.known_objects:
                 # We don't know this game object, notify self with its update packet.
                 update_packet = gobject.generate_proper_update_packet(create=True, is_self=False)
                 self.enqueue_packet(update_packet)
                 self.enqueue_packet(gobject.query_details())
                 self.known_objects[guid] = gobject
+            # We know this gameobject and its pending an update, request partial.
             elif gobject.is_spawned and guid in self.known_objects and gobject.dirty:
                 partial_packet = gobject.generate_proper_update_packet(create=False, is_self=False)
                 self.enqueue_packet(partial_packet)
@@ -1368,8 +1369,12 @@ class PlayerManager(UnitManager):
                 if self.logout_timer < 0:
                     self.logout()
 
+            if self.dirty:
+                MapManager.update_object(self)
+                if self.reset_fields_older_than(now):
+                    self.set_dirty(is_dirty=False, dirty_inventory=False)
             # Check "dirtiness" to determine if this player object should be updated yet or not.
-            if not self.update_lock and not self.dirty and self.pending_teleport_destination:
+            elif not self.update_lock and not self.dirty and self.pending_teleport_destination:
                 self.trigger_teleport()
 
         self.last_tick = now

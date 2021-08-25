@@ -308,6 +308,11 @@ class GameObjectManager(ObjectManager):
         if now > self.last_tick > 0:
             elapsed = now - self.last_tick
 
+            if self.dirty:
+                MapManager.update_object(self)
+                if self.reset_fields_older_than(now):
+                    self.set_dirty(is_dirty=False)
+
             if not self.is_spawned:
                 self.respawn_timer += elapsed
                 if self.respawn_timer >= self.respawn_time and not self.is_summon:
