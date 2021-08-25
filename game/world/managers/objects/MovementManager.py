@@ -68,7 +68,7 @@ class MovementManager(object):
                 self.unit.location.x = new_position.x
                 self.unit.location.y = new_position.y
                 self.unit.location.z = new_position.z
-                self.unit.set_dirty()
+                MapManager.update_object(self.unit)
         else:
             # Path finished
             if self.total_waypoint_timer > self.total_waypoint_time:
