@@ -130,7 +130,6 @@ class CreatureManager(UnitManager):
             creature.faction = override_faction
 
         creature.load()
-        creature.send_create_packet_surroundings()
 
         return creature
 
@@ -523,7 +522,7 @@ class CreatureManager(UnitManager):
             if self.killed_by.group_manager:
                 self.killed_by.group_manager.reward_group_creature_or_go(self.killed_by, self)
             elif self.killed_by.quest_manager.reward_creature_or_go(self):
-                self.killed_by.send_update_self()
+                self.set_dirty()
             # If the player is in a group, set the group as allowed looters if needed.
             if self.killed_by.group_manager and self.loot_manager.has_loot():
                 self.killed_by.group_manager.set_allowed_looters(self)

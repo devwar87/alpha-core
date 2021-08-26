@@ -668,12 +668,12 @@ class QuestManager(object):
     def remove_from_quest_log(self, quest_id):
         self.active_quests.pop(quest_id)
         self.build_update()
-        self.player_mgr.send_update_self()
+        self.player_mgr.set_dirty()
 
     def add_to_quest_log(self, quest_id, active_quest):
         self.active_quests[quest_id] = active_quest
         self.build_update()
-        self.player_mgr.send_update_self()
+        self.player_mgr.set_dirty()
 
     def pop_item(self, item_entry, item_count):
         should_update = False

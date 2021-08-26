@@ -322,7 +322,7 @@ class GroupManager(object):
         for member in surrounding_members:
             member.enqueue_packet(kill_log_packet)
             member.quest_manager.reward_creature_or_go(creature)
-            member.send_update_self()
+            member.set_dirty()
 
     def send_invite_decline(self, player_name):
         player_mgr = WorldSessionStateHandler.find_player_by_guid(self.group.leader_guid)

@@ -125,7 +125,7 @@ class InventoryManager(object):
             # Update quest item count, if needed.
             self.owner.quest_manager.reward_item(item_template.entry, item_count=count)
             # Update own inventory.
-            self.owner.send_update_self(force_inventory_update=True)
+            self.owner.set_dirty(is_dirty=False, dirty_inventory=True)
 
         return items_added
 
@@ -167,7 +167,7 @@ class InventoryManager(object):
                 self.add_item(item_template=item_template, count=remaining)  # Overflow to inventory
             else:
                 # Update if container is modified self.add_item isn't called
-                self.owner.send_update_self(force_inventory_update=True)
+                self.owner.set_dirty(is_dirty=False, dirty_inventory=True)
             return True
 
         # Stack handling
@@ -181,7 +181,7 @@ class InventoryManager(object):
                         dest_item.item_instance.stackcount += diff
                         self.add_item(item_template=item_template, count=count-diff, handle_error=False)
 
-                    self.owner.send_update_self(force_inventory_update=True)
+                    self.owner.set_dirty(is_dirty=False, dirty_inventory=True)
                     RealmDatabaseManager.character_inventory_update_item(dest_item.item_instance)
                     return True
                 else:
@@ -203,7 +203,7 @@ class InventoryManager(object):
             self.handle_equipment_change(generated_item)
             RealmDatabaseManager.character_inventory_update_item(generated_item.item_instance)
         else:
-            self.owner.send_update_self(force_inventory_update=True)
+            self.owner.set_dirty(is_dirty=False, dirty_inventory=True)
 
         return True
 
@@ -243,7 +243,7 @@ class InventoryManager(object):
                 dest_item.item_instance.stackcount = dest_item.item_template.stackable
                 RealmDatabaseManager.character_inventory_update_item(source_item.item_instance)
 
-            self.owner.send_update_self(force_inventory_update=True)
+            self.owner.set_dirty(is_dirty=False, dirty_inventory=True)
             RealmDatabaseManager.character_inventory_update_item(dest_item.item_instance)
             return
 
@@ -277,7 +277,7 @@ class InventoryManager(object):
                 (self.is_equipment_pos(dest_bag, dest_slot) or self.is_bag_pos(dest_slot)):  # Added equipment or bag
             self.handle_equipment_change(source_item, dest_item)
         else:
-            self.owner.send_update_self(force_inventory_update=True)
+            self.owner.set_dirty(is_dirty=False, dirty_inventory=True)
 
         # Finally, update items and client
         RealmDatabaseManager.character_inventory_update_item(source_item.item_instance)
@@ -357,7 +357,7 @@ class InventoryManager(object):
                     elif count >= item.item_instance.stackcount:
                         self.remove_item(container_slot, slot, True)
                         count -= item.item_instance.stackcount
-        self.owner.send_update_self(force_inventory_update=True)
+        self.owner.set_dirty(is_dirty=False, dirty_inventory=True)
         return count  # Return the amount of items not removed
 
     def get_item_info_by_guid(self, guid):
@@ -714,26 +714,28 @@ class InventoryManager(object):
         for slot, item in self.get_backpack().sorted_slots.items():
             self.owner.set_uint64(PlayerFields.PLAYER_FIELD_INV_SLOT_1 + item.current_slot * 2, item.guid)
 
-    def send_single_item_update(self, item, is_self):
+    def get_single_item_update(self, item):
         update_packet = UpdatePacketFactory.compress_if_needed(PacketWriter.get_packet(
             OpCode.SMSG_UPDATE_OBJECT, item.get_full_update_packet(is_self=False)))
-        if is_self:
-            self.owner.enqueue_packet(update_packet)
-            self.owner.enqueue_packet(item.query_details())
-        else:
-            MapManager.send_surrounding(update_packet, self.owner, include_self=False)
-            MapManager.send_surrounding(item.query_details(), self.owner, include_self=False)
 
-    def send_inventory_update(self, is_self=True):
+        return [item.query_details(), update_packet]
+
+    def get_inventory_update(self):
         # Edge case where the session might be null at some point.
         if self.owner and not self.owner.session:
             return
 
+        update_packets = []
         for container_slot, container in list(self.containers.items()):
             if not container:
                 continue
             if not container.is_backpack:
-                self.send_single_item_update(container, is_self)
+                for packet in self.get_single_item_update(container):
+                    update_packets.append(packet)
 
             for slot, item in list(container.sorted_slots.items()):
-                self.send_single_item_update(item, is_self)
+                for packet in self.get_single_item_update(item):
+                    update_packets.append(packet)
+
+        print(len(update_packets))
+        return update_packets

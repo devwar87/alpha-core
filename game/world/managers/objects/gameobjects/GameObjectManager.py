@@ -152,7 +152,7 @@ class GameObjectManager(ObjectManager):
         # Activate chest open animation, while active, it won't let any other player loot.
         if self.state == GameObjectStates.GO_STATE_READY:
             self.state = GameObjectStates.GO_STATE_ACTIVE
-            self.send_create_packet_surroundings()
+            self.set_dirty()
 
         # Generate loot if it's empty.
         if not self.loot_manager.has_loot():

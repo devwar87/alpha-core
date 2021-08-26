@@ -40,15 +40,22 @@ class GridManager(object):
             self.remove_object(world_object, update_players=False)
             self.add_object(world_object, update_players=False)
             # Update old location surroundings, even if in the same grid, both cells quadrants might not see each other.
-            affected_cells = self.update_players(source_cell_key)
+            affected_cells = self.update_players(source_cell_key, world_object.get_type(), surrounding_objects=None)
             # Update new location surroundings, excluding intersecting cells from previous call.
-            self.update_players(current_cell_key, exclude_cells=affected_cells)
+            self.update_players(current_cell_key, world_object.get_type(), surrounding_objects=None, exclude_cells=affected_cells)
 
+        should_notify = False
+        if world_object.get_type() == ObjectTypes.TYPE_PLAYER:
+            if world_object.dirty or world_object.dirty_inventory:
+                world_object.send_update_self()
+                should_notify = True
         # World object is dirty, notify self and surrounding players.
-        if world_object.dirty:
-            if world_object.get_type() == ObjectTypes.TYPE_PLAYER:
-                world_object.send_update_self(reset_fields=False)
-            self.update_players(world_object.current_cell)
+        elif world_object.dirty:
+            should_notify = True
+
+        if should_notify:
+            surrounding_objects = self.get_all_surrounding_objects(world_object)
+            self.update_players(world_object.current_cell, world_object.get_type(), surrounding_objects=surrounding_objects)
 
         # Notify cell changed if needed.
         if old_grid_manager and old_grid_manager != self or current_cell_key != source_cell_key:
@@ -56,11 +63,12 @@ class GridManager(object):
 
     def add_object(self, world_object, update_players=True):
         cell = self.get_create_cell(world_object)
-        cell.add(self, world_object)
+        cell.add(world_object)
 
+        surrounding_objects = self.get_all_surrounding_objects(world_object)
         # Notify surrounding players.
         if update_players:
-            self.update_players(cell.key)
+            self.update_players(cell.key, world_object.get_type(), surrounding_objects=surrounding_objects)
 
         if world_object.get_type() == ObjectTypes.TYPE_PLAYER:
             affected_cells = list(self.get_surrounding_cells_by_object(world_object))
@@ -73,17 +81,20 @@ class GridManager(object):
         cell = self.cells.get(world_object.current_cell)
         if cell:
             cell.remove(world_object)
+            surrounding_objects = self.get_all_surrounding_objects(world_object)
             # Notify surrounding players.
             if update_players:
-                self.update_players(cell.key)
+                self.update_players(cell.key, world_object.get_type(), surrounding_objects=surrounding_objects)
 
     def respawn_object(self, world_object):
         world_object.is_spawned = True
-        self.update_players(world_object.current_cell)
+        surrounding_objects = self.get_all_surrounding_objects(world_object)
+        self.update_players(world_object.current_cell, world_object.get_type(), surrounding_objects=surrounding_objects)
 
     def despawn_object(self, world_object):
         world_object.is_spawned = False
-        self.update_players(world_object.current_cell)
+        surrounding_objects = self.get_all_surrounding_objects(world_object)
+        self.update_players(world_object.current_cell, world_object.get_type(), surrounding_objects=surrounding_objects)
 
     def activate_cells(self, cells):
         for cell in cells:
@@ -96,7 +107,7 @@ class GridManager(object):
                 for creature in list(cell.creatures.values()):
                     self.active_cell_callback(creature)
 
-    def update_players(self, cell_key, exclude_cells=set()):
+    def update_players(self, cell_key, object_type, surrounding_objects=None, exclude_cells=set()):
         # Avoid update calls if no players are present.
         if len(self.active_cell_keys) == 0:
             return set()
@@ -106,7 +117,7 @@ class GridManager(object):
         if source_cell:
             for cell in self.get_surrounding_cells_by_cell(source_cell):
                 if cell not in exclude_cells:
-                    cell.update_players()
+                    cell.update_players(object_type=object_type, surrounding_objects=surrounding_objects)
                     affected_cells.add(cell)
 
         return affected_cells
@@ -169,6 +180,14 @@ class GridManager(object):
         for cell in self.get_surrounding_cells_by_object(world_object):
             cell.send_all_in_range(
                 packet, range_, world_object, include_self, exclude, use_ignore)
+
+    def get_all_surrounding_objects(self, world_object):
+        surrounding_objects = [{}, {}, {}]
+        for cell in self.get_surrounding_cells_by_object(world_object):
+            surrounding_objects[0] = {**surrounding_objects[0], **cell.players}
+            surrounding_objects[1] = {**surrounding_objects[1], **cell.creatures}
+            surrounding_objects[2] = {**surrounding_objects[2], **cell.gameobjects}
+        return surrounding_objects
 
     def get_surrounding_objects(self, world_object, object_types):
         surrounding_objects = [{}, {}, {}]
@@ -306,8 +325,8 @@ class Cell(object):
                 and map_ == self.map_
         return False
 
-    def add(self, grid_manager, world_object):
-        # Update world_object cell so the below messages affect the new cell surroundings.
+    def add(self, world_object):
+        # Update world_object cell.
         world_object.current_cell = self.key
 
         if world_object.get_type() == ObjectTypes.TYPE_PLAYER:
@@ -318,9 +337,9 @@ class Cell(object):
             self.gameobjects[world_object.guid] = world_object
 
     # Make each player update its surroundings, adding or removing world objects as needed.
-    def update_players(self):
+    def update_players(self, object_type, surrounding_objects=None):
         for player in list(self.players.values()):
-            player.update_surrounding_on_me()
+            player.update_surrounding_on_me(object_type=object_type, surrounding_objects=surrounding_objects)
 
     def remove(self, world_object):
         if world_object.get_type() == ObjectTypes.TYPE_PLAYER:
